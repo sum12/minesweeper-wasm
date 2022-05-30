@@ -4,12 +4,6 @@ pub type Point = (usize, usize);
 
 use wasm_bindgen::prelude::*;
 
-#[derive(Debug, Clone, Copy)]
-pub enum CellContent {
-    Mine,
-    NoMine(u8),
-}
-
 #[wasm_bindgen]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,10 +39,6 @@ pub fn neighbour_points(point: Point, bounds: Point) -> impl Iterator<Item = Poi
 }
 
 impl Game {
-    pub fn to_array(&self) -> Vec<u8> {
-        self.state.iter().map(|cell| 0).collect()
-    }
-
     pub fn neighbours(&self, point: Point) -> impl Iterator<Item = &Cell> {
         neighbour_points(point, (self.width, self.height))
             .map(|(x, y)| &self.state[y * self.height + x])
