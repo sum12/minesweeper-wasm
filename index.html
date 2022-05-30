@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+	<meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+    <title>Minesweeper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html {
+        font-size: 200%;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      .field {
+        text-decoration: none;
+        text-align: center;
+        width: 1.2rem;
+        height: 1.2rem;
+        line-height: 1.2rem;
+      }
+	  .correct {
+        background: lightgreen;
+      }
+	  .incorrect {
+        background: #ff726f;
+      }
+    </style>
+  </head>
+  <body>
+      <div>
+        <div>
+            <label for="gridslider">Grid   </label>
+            <input type="range" id="gridslider" name="gridslider" min="5" max="20" step="1" value="5" >
+            <label id="gridslidelabel">10</label>
+        </div>
+        <div>
+            <label for="mineslider">Mines</label>
+            <input type="range" id="mineslider" name="mineslider" min="5" max="20" step="1" value="5" >
+            <label id="minesliderlabel">10</label>
+        </div>
+        <button id="reset"> Go </button>
+      </div>
+    <div id="root"></div>
+    <script type="module">
+
+      import init, { Game, CellState} from "./pkg/minesweeper.js";
+
+
+      function sliderLabeler (slide, label) {
+        let obj = document.getElementById(slide);
+		obj.addEventListener("change", (evt) => {
+          document.getElementById(label).innerHTML = evt.target.value;
+		})
+		obj.addEventListener("mousemove", (evt) => {
+          document.getElementById(label).innerHTML = evt.target.value;
+		})
+	    document.getElementById(label).innerHTML = obj.value;
+	  }
+
+      function reset(wasm) {
+        const size = document.getElementById("gridslider").value;
+        const mines = document.getElementById("mineslider").value;
+        if (mines > (size*size) * 0.5) {
+			alert("too many mines !!");
+			return ;
+		}
+		const game = Game.new(size, size, mines);
+		const cellsPtr = game.cells();
+		const cells = new Uint8Array(wasm.memory.buffer, cellsPtr, game.width * game.height * 2);
+		render(cells, game);
+	  }
+
+      async function main() {
+        sliderLabeler("gridslider", "gridslidelabel");
+        sliderLabeler("mineslider", "minesliderlabel");
+        const wasm = await init();
+		
+        let obj = document.getElementById("reset");
+        obj.addEventListener("click", (evt) => {reset(wasm)})
+        const size = document.getElementById("gridslider").value;
+        const mines = document.getElementById("mineslider").value;
+        if (mines < (size*size) * 0.5) {
+			reset(wasm);
+		}
+      }
+
+	  function hasMine(cells, game, x, y) {
+		return cells[(y*game.height + x)*2 + 1] == 1
+	  }
+	  function hasFlag(cells, game, x, y) {
+		return cells[(y*game.height + x)*2] == CellState.Flag
+	  }
+
+	  function cellContent(cells, game, x, y) {
+		if (cells[(y*game.height + x)*2] == CellState.Close) {
+		  return "🔲";
+		} else if (cells[(y*game.height + x)*2] == CellState.Open) {
+		  if (hasMine(cells, game, x, y)) {
+			return "💣"
+		  } else {
+			  const count = game.cell_minecount(x,y);
+			  if (count == 0 ){
+				return  "⬜";
+			  }
+			  return  count + "\ufe0f";
+		  }
+		} else if (cells[(y*game.height + x)*2] == CellState.Flag) {
+		  return "🚩";
+		}
+	  }
+
+      function render(cells, game) {
+        let root = document.getElementById("root");
+        root.innerHTML = "";
+
+        root.style.display = "inline-grid";
+        root.style.gridTemplate = `repeat(${game.width}, auto) / repeat(${game.height}, auto)`;
+		console.log(game.finished)
+
+        for (let y = 0; y < game.height; y++) {
+          for (let x = 0; x < game.width; x++) {
+            let element = document.createElement("a");
+            element.classList.add("field");
+            element.href = "#";
+			element.innerText = cellContent(cells, game,x,y);
+			if (game.finished == true) {
+   			  if (hasMine(cells, game, x, y)) {
+   			    if (hasFlag(cells, game, x, y)) {
+				  element.classList.add("correct");
+			    } else {
+				  element.classList.add("incorrect");
+				}
+			  }
+			}
+
+            element.addEventListener("click", (evt) => {
+              evt.preventDefault();
+
+              game.cell_open(x, y);
+              render(cells, game);
+            });
+
+            element.addEventListener("contextmenu", (evt) => {
+              evt.preventDefault();
+
+              game.cell_toggle_flag(x, y);
+              render(cells, game);
+            });
+
+            root.appendChild(element);
+          }
+        }
+
+      }
+
+      main();
+    </script>
+
+  </body>
+</html>
+

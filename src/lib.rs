@@ -2,28 +2,34 @@ use std::fmt::Display;
 
 pub type Point = (usize, usize);
 
+use wasm_bindgen::prelude::*;
+
 #[derive(Debug, Clone, Copy)]
 pub enum CellContent {
     Mine,
     NoMine(u8),
 }
 
+#[wasm_bindgen]
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CellState {
-    Close,
-    Open,
-    Flag,
+    Close = 0,
+    Open = 1,
+    Flag = 2,
 }
 
 #[derive(Debug, Clone, Copy)]
+#[repr(C)]
 pub struct Cell {
     state: CellState,
     has_mine: bool,
 }
 
+#[wasm_bindgen]
 #[derive(Debug)]
-struct Game {
-    pub state: Vec<Cell>,
+pub struct Game {
+    state: Vec<Cell>,
     pub width: usize,
     pub height: usize,
     pub finished: bool,
@@ -39,21 +45,6 @@ pub fn neighbour_points(point: Point, bounds: Point) -> impl Iterator<Item = Poi
 }
 
 impl Game {
-    pub fn new(width: usize, height: usize) -> Self {
-        Game {
-            state: vec![
-                Cell {
-                    state: CellState::Close,
-                    has_mine: false,
-                };
-                width * height
-            ],
-            width,
-            height,
-            finished: false,
-        }
-    }
-
     pub fn to_array(&self) -> Vec<u8> {
         self.state.iter().map(|cell| 0).collect()
     }
@@ -69,6 +60,10 @@ impl Game {
 
     pub fn add_mine(&mut self, p: Point) {
         self.state[p.1 * self.height + p.0].has_mine = true;
+    }
+
+    pub fn has_mine(&mut self, p: Point) -> bool {
+        self.state[p.1 * self.height + p.0].has_mine
     }
 
     pub fn is_closed(&self, p: Point) -> bool {
@@ -106,7 +101,7 @@ impl Game {
         let cell = &mut self.state[p.1 * self.height + p.0];
         match cell.state {
             CellState::Flag => {
-                cell.state = CellState::Open;
+                cell.state = CellState::Flag;
             }
             CellState::Open => {
                 let mc = self.mine_count(p);
@@ -124,6 +119,70 @@ impl Game {
                 }
             }
         }
+        if self
+            .state
+            .iter()
+            .all(|cell| matches!(cell.state, CellState::Open | CellState::Flag))
+        {
+            self.finished = true;
+        }
+    }
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = Math)]
+    fn random() -> f32;
+}
+
+fn random_mine_position(max: usize) -> usize {
+    (random() * max as f32).floor() as usize
+}
+
+#[wasm_bindgen]
+impl Game {
+    pub fn cell_open(&mut self, x: usize, y: usize) {
+        self.open((x, y))
+    }
+
+    pub fn cell_toggle_flag(&mut self, x: usize, y: usize) {
+        self.toggle_flag((x, y))
+    }
+
+    pub fn cells(&self) -> *const Cell {
+        self.state.as_ptr()
+    }
+    pub fn new(width: usize, height: usize, mines: u32) -> Self {
+        let mut g = Game {
+            state: vec![
+                Cell {
+                    state: CellState::Close,
+                    has_mine: false,
+                };
+                width * height
+            ],
+            width,
+            height,
+            finished: false,
+        };
+        let mut mc = 0;
+        while mc < mines {
+            let (x, y) = (random_mine_position(width), random_mine_position(height));
+            if g.has_mine((x, y)) {
+                continue;
+            }
+            g.add_mine((x, y));
+            mc += 1
+        }
+        g
+    }
+
+    pub fn add_mines(&mut self, x: u32, y: u32) {
+        self.state[y as usize * self.height + x as usize].has_mine = true;
+    }
+
+    pub fn cell_minecount(&self, x: u32, y: u32) -> usize {
+        self.mine_count((x as usize, y as usize))
     }
 }
 
@@ -153,17 +212,13 @@ impl Display for Game {
     }
 }
 
-fn main() {
-    println!("{}", Game::new(10, 10));
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_basic_test() {
-        let mut g = Game::new(10, 10);
+        let mut g = Game::new(10, 10, 5);
         g.add_mine((1, 1));
         g.add_mine((5, 5));
         println!("{}", g);
