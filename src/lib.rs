@@ -81,7 +81,7 @@ impl Game {
         *cstate = match cstate {
             CellState::Flag => CellState::Close,
             CellState::Close => CellState::Flag,
-            CellState::Open => panic!("cannot flag open cell"),
+            CellState::Open => return,
         };
     }
     pub fn open(&mut self, p: Point) {
